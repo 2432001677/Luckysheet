@@ -437,7 +437,7 @@ const luckysheetformula = {
             for (let c = 0; c < range[0].length; c++) {
                 if (range[0][c] != null && range[0][c].v) {
                     rangeNow.push(range[0][c].v);
-                    let f = range[0][c].ct.fa;
+                    let f = range[0][c].ct?.fa;
                     fmt = fmt == "General" ? f : fmt;
                 } else {
                     //若单元格为null或为空，此处推入null（待考虑是否使用"null"）
@@ -449,7 +449,7 @@ const luckysheetformula = {
             for (let r = 0; r < range.length; r++) {
                 if (range[r][0] != null && range[r][0].v) {
                     rangeNow.push(range[r][0].v);
-                    let f = range[r][0].ct.fa;
+                    let f = range[r][0].ct?.fa;
                     fmt = fmt == "General" ? f : fmt;
                 } else {
                     rangeNow.push(null);
@@ -460,7 +460,7 @@ const luckysheetformula = {
                 for (let c = 0; c < range[r].length; c++) {
                     if (range[r][c] != null && range[r][c].v) {
                         rangeNow.push(range[r][c].v);
-                        let f = range[r][c].ct.fa;
+                        let f = range[r][c].ct?.fa;
                         fmt = fmt == "General" ? f : fmt;
                     } else {
                         rangeNow.push(null);
@@ -468,6 +468,8 @@ const luckysheetformula = {
                 }
             }
         }
+
+        fmt = fmt ?? "General";
 
         range = rangeNow;
 
@@ -1753,11 +1755,8 @@ const luckysheetformula = {
             rangetxt;
 
         if (val.length > 1) {
-            //r如果有sheet名字+ !+范围这种范围是不对的，设置以后不能生效，因此要禁用掉。
-            //如果大于1说明是这种形式的，就不应该通过验证
+            // Supports cross-table references
             rangetxt = val[1];
-            return false;
-            
         } else {
             rangetxt = val[0];
         }
@@ -6123,6 +6122,70 @@ const luckysheetformula = {
     functionResizeStatus: false,
     functionResizeTimeout: null,
     data_parm_index: 0, //选择公式后参数索引标记
+
+    // 点中指定的公式，展示刷新按钮
+    cellFocus:function(row_index, col_index) {
+        const file = Store.luckysheetfile[getSheetIndex(Store.currentSheetIndex)];
+        if(file.calcChain){
+            let txt = ''
+            file.calcChain?.find(({ r, c, func }) => {
+                if(r === row_index && c === col_index){
+                    txt = Store.flowdata[r][c]?.f;
+                    return true
+                }
+            });
+            if(txt.indexOf('=GET_AIRTABLE_DATA') === 0){
+                this.showButton(row_index, col_index)
+                this.addButtonListener(txt,row_index, col_index,)
+            }else{
+                this.hideButton()
+            }
+        }
+
+        
+    },
+    addButtonListener:function(txt, r, c){
+        let listener =  $("#luckysheet-formula-refresh").data("listener")
+
+        if(!listener){
+            console.info('listener')
+            $("#luckysheet-formula-refresh").data("listener","true")
+            $("#luckysheet-formula-refresh").on('click',(e)=>{
+                this.execFunctionGroupForce(true);
+                jfrefreshgrid()
+                e.stopPropagation();
+            })
+        }
+        
+    },
+    showButton: function(r, c) {
+
+        let _this = this;
+
+        let row = Store.visibledatarow[r],
+            row_pre = r == 0 ? 0 : Store.visibledatarow[r - 1];
+        let col = Store.visibledatacolumn[c],
+            col_pre = c == 0 ? 0 : Store.visibledatacolumn[c - 1];
+
+        let margeset = menuButton.mergeborer(Store.flowdata, r, c);
+        if(!!margeset){
+            row = margeset.row[1];
+            row_pre = margeset.row[0];
+            
+            col = margeset.column[1];
+            col_pre = margeset.column[0];
+        }
+
+        $("#luckysheet-formula-refresh").show().css({
+            'max-width': col - col_pre,
+            'max-height': row - row_pre,
+            'left': col - 20,
+            'top': row_pre + (row - row_pre - 20) / 2
+        })
+    },
+    hideButton: function() {
+        $("#luckysheet-formula-refresh").hide()
+    }
 };
 
 export default luckysheetformula;

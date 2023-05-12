@@ -1,11 +1,11 @@
 import { isEditMode } from "../global/validate";
 import cleargridelement from "../global/cleargridelement";
-import { getcellvalue, datagridgrowth, getcellFormula } from "../global/getdata";
+import { getdatabyselectionD, getcellvalue, datagridgrowth, getcellFormula } from "../global/getdata";
 import { setcellvalue } from "../global/setdata";
 import luckysheetcreatedom from "../global/createdom";
 import tooltip from "../global/tooltip";
 import formula from "../global/formula";
-import { luckysheetrefreshgrid, jfrefreshgrid_rhcw } from "../global/refresh";
+import { luckysheetrefreshgrid, jfrefreshgrid_rhcw,jfrefreshgrid } from "../global/refresh";
 import rhchInit from "../global/rhchInit";
 import editor from "../global/editor";
 import { luckysheetextendtable, luckysheetdeletetable } from "../global/extend";
@@ -30,7 +30,8 @@ import { changeSheetContainerSize, menuToolBarWidth } from "./resize";
 import { zoomNumberDomBind } from "./zoom";
 import menuButton from "./menuButton";
 import method from "../global/method";
-import { initialEvent } from './protection';
+import { initialEvent } from "./protection";
+import luckysheetformula from "../global/formula";
 
 const sheetmanage = {
     generateRandomSheetIndex: function(prefix) {
@@ -199,9 +200,10 @@ const sheetmanage = {
 
         return Store.currentSheetIndex;
     },
-    getCustomSheet()//设置自定义luckysheet 配置项。
-    {
-        return JSON.parse(JSON.stringify(this.Luckysheet_custom_sheet));//每次都返回一个自定义sheet新对象
+    getCustomSheet() {
+        //设置自定义luckysheet 配置项。
+        if (!this.Luckysheet_custom_sheet) return {};
+        return JSON.parse(JSON.stringify(this.Luckysheet_custom_sheet)); //每次都返回一个自定义sheet新对象
     },
     setCustomSheet(luckysheet_custom_sheet) {
         this.Luckysheet_custom_sheet = luckysheet_custom_sheet;
@@ -229,26 +231,32 @@ const sheetmanage = {
 
         let sheetconfig = {};
         let sheet_defaullt_config = this.getCustomSheet();
-        if (JSON.stringify(sheet_defaullt_config) != "{}" && sheet_defaullt_config != null && sheetconfig != undefined) {//判断设置的自定义sheet
+        if (
+            JSON.stringify(sheet_defaullt_config) != "{}" &&
+            sheet_defaullt_config != null &&
+            sheetconfig != undefined
+        ) {
+            //判断设置的自定义sheet
             sheetconfig = sheet_defaullt_config;
             // sheet_defaullt_config.isPivotTable=false;
             sheetconfig.index = index;
             sheetconfig.order = order;
             sheetconfig.name = sheetname;
             // sheet_defaullt_config.config={};
-        } else {//自定义sheet为空的话
+        } else {
+            //自定义sheet为空的话
             sheetconfig = {
-                "name": sheetname,
-                "color": "",
-                "status": "0",
-                "order": order,
-                "index": index,
-                "celldata": [],
-                "row": Store.defaultrowNum,
-                "column": Store.defaultcolumnNum,
-                "config": {},
-                "pivotTable": null,
-                "isPivotTable": !!isPivotTable
+                name: sheetname,
+                color: "",
+                status: "0",
+                order: order,
+                index: index,
+                celldata: [],
+                row: Store.defaultrowNum,
+                column: Store.defaultcolumnNum,
+                config: {},
+                pivotTable: null,
+                isPivotTable: !!isPivotTable,
             };
         }
         Store.luckysheetfile.push(sheetconfig);
@@ -1284,6 +1292,9 @@ const sheetmanage = {
         ).hide();
         $("#luckysheet-filter-selected-sheet" + index + ", #luckysheet-filter-options-sheet" + index).show();
 
+        // 存储当前index，在远程公式里能识别，如果不是当前页就不要刷新（远程公式只能刷新当前页）
+        window.luckysheetCurrentIndex = index;
+
         _this.storeSheetParamALL();
         _this.setCurSheet(index);
 
@@ -1291,11 +1302,23 @@ const sheetmanage = {
             Store.luckysheetcurrentisPivotTable = true;
             if (!isPivotInitial) {
                 pivotTable.changePivotTable(index);
+
+                // const data = Store.luckysheetfile[_this.getSheetIndex(index)].data;
+                // if (!!data && data instanceof Array) {
+                //     for (let i = 0; i < data.length; i++) {
+                //         if (!data[i]) continue;
+                //         for (let j = 0; j < data[i].length; j++) {
+                //             if (!data[i][j]) continue;
+                //             luckysheetformula.execFunctionGroup(i, j, data[i][j]);
+                //         }
+                //     }
+                // }
             }
         } else {
             Store.luckysheetcurrentisPivotTable = false;
             $("#luckysheet-modal-dialog-slider-pivot").hide();
             luckysheetsizeauto(false);
+            this.refreshAllPivotTable(Store.currentSheetIndex);
         }
 
         let load = file["load"];
@@ -1309,7 +1332,7 @@ const sheetmanage = {
             _this.showSheet();
 
             setTimeout(function() {
-                formula.execFunctionGroup();
+                formula.execFunctionGroupForce(true);
                 luckysheetrefreshgrid();
                 server.saveParam("shs", null, Store.currentSheetIndex);
             }, 1);
@@ -1408,6 +1431,7 @@ const sheetmanage = {
 
         $("#luckysheet-cell-main .luckysheet-datavisual-selection-set").hide();
         $("#luckysheet-datavisual-selection-set-" + index).show();
+        luckysheetformula.hideButton()
 
         //隐藏其他sheet的图表，显示当前sheet的图表 chartMix
         renderChartShow(index);
@@ -1416,6 +1440,85 @@ const sheetmanage = {
         _this.restoreselect();
         //工作表保护的事件 不初始化工作表保护打开以后引用单元格点不动
         initialEvent(file);
+    },
+
+    refreshAllPivotTable: function(index) {
+        Store.luckysheetfile.forEach((file)=>{
+            if(file.isPivotTable){
+                this.refreshPivotTableByFile(file)
+            }
+        })
+    },
+    refreshPivotTableByFile:function(file) {
+        let pivotTableConfig = file.pivotTable
+
+        let column = pivotTableConfig.column
+        let row = pivotTableConfig.row
+        let values = pivotTableConfig.values
+        let showType = pivotTableConfig.showType
+        let filterparm = pivotTableConfig.filterparm
+        let pivotDataSheetIndex = pivotTableConfig.pivotDataSheetIndex
+
+        let pivotrealIndex = this.getSheetIndex(pivotDataSheetIndex);
+
+        let otherfile = Store.luckysheetfile[pivotrealIndex];
+        if(otherfile["data"] == null){
+            otherfile["data"] = this.buildGridData(otherfile);
+        }
+
+        const origindata = getdatabyselectionD(otherfile.data, pivotTableConfig.pivot_select_save);
+
+        let rowhidden = {};
+        if (filterparm != null) {
+            for (let f in filterparm) {
+                // 目的是取出rowhidden
+                for (let h in filterparm[f]) {
+                    if (h === 'rowhidden' && _this.filterparm[f][h] != null) {
+                        rowhidden = $.extend(true, rowhidden, filterparm[f][h]);
+                    }
+                }
+            }
+        }
+
+
+        let newdata = [];
+        for (let i = 0; i < origindata.length; i++) {
+            if (rowhidden != null && rowhidden[i] != null) {
+                continue;
+            }
+            newdata.push([].concat(origindata[i]));
+        }
+
+        let ret = pivotTable.dataHandler(column, row, values, showType, newdata);
+        
+        pivotTableConfig.pivotDatas = ret
+
+
+        let d = $.extend(true, [], this.nulldata);
+        let data = d;
+
+        let addr = 0, addc = 0;
+        let rlen = ret.length, 
+                clen = ret[0].length;
+
+            addr = rlen - d.length; 
+            addc = clen - d[0].length;
+
+            data = datagridgrowth(d, addr + 20, addc + 10, true);
+
+            for (let r = 0; r < rlen; r++) {
+                // let x = [].concat(data[r]);
+                for (let c = 0; c < clen; c++) {
+                    let value = "";
+                    if (ret[r] != null && ret[r][c] != null) {
+                        value = getcellvalue(r, c, ret);
+                        setcellvalue(r,c,data,value)
+                    }
+                    // x[c] = value;
+                }
+                // data[r] = x;
+            }
+        file.data = data;
     },
     checkLoadSheetIndexToDataIndex: {},
     checkLoadSheetIndex: function(file) {

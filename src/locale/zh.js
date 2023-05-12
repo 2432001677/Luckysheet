@@ -694,6 +694,44 @@ export default {
                 }
             ]
         },
+        "GET_TARGET": {
+            "d": "查询目标数据。",
+            "a": "查询目标数据。",
+            "p": [
+            ]
+        },
+        "GET_AIRTABLE_DATA": {
+            "d": "查询AirTable数据。",
+            "a": "查询AirTable数据。",
+            "p": [
+                {
+                    "name": "AirTable 地址",
+                    "detail": "AirTable URL链接地址"
+                },
+                {
+                    "name": "排序列",
+                    "detail": "表示要排序的列的数字。"
+                },
+                {
+                    "name": "是否升序",
+                    "detail": "[可选] - 1 或 0 表示是否按升序对 `排序列` 进行排序。 0 按降序排列，1 按升序排列。"
+                },
+            ]
+        },
+        "ASK_AI": {
+            "d": "向AI提问。",
+            "a": "向AI提问。",
+            "p": [
+                {
+                    "name": "问题",
+                    "detail": "向AI咨询，你想得到的数据。"
+                },
+                {
+                    "name": "条件范围",
+                    "detail": "要在哪个范围内处理数据。"
+                },
+            ]
+        },
         "COUNTIFS": {
             "d": "根据多项条件返回范围中的单元格数量。",
             "a": "根据多项条件返回范围中的单元格数量。",
@@ -5788,7 +5826,7 @@ export default {
                     "detail": "Formula"
                 }
             ]
-        }
+        },
     },
     toolbar: {
         undo: '撤销',
