@@ -6685,6 +6685,9 @@ export function toJson(){
     toJsonOptions.title = $("#luckysheet_info_detail_input").val();
 
     toJsonOptions.data = getAllSheets();
+    for (let i = 0; i < toJsonOptions.data.length; i++) {
+        toJsonOptions.data[i].order = parseInt(toJsonOptions.data[i].order)
+    }
 
     // row and column
     getluckysheetfile().forEach((file,index)=>{
